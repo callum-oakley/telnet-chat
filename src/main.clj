@@ -1,4 +1,4 @@
 (ns main
-  (:require [server]))
+  (:require [server] [bus]))
 
-(server/serve 8888)
+(server/serve (bus/bus) 8888)

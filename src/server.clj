@@ -5,7 +5,8 @@
   (:require
     [clojure.java.io :as io]
     [clojure.core.async :as async]
-    [request])
+    [request]
+    [bus])
   (:import [java.net ServerSocket]))
 
 ;;;; TODO handle non-text input
@@ -24,33 +25,35 @@
     (.write writer (str line \newline))
     (.flush writer)))
 
-(defn handle-pub [sock]
-  prn "handle-pub")
+(defn handle-pub [bus sock {chan :chan msg :msg}]
+  (bus/pub bus chan msg))
 
-(defn handle-sub [sock]
-  prn "handle-sub")
+(defn handle-sub [bus sock {chan :chan}]
+  (async/go
+    (let [subscription (bus/sub bus chan)]
+      (while true
+        (->> subscription
+          async/<!
+          (str "MSG ")
+          (write sock))))))
 
-(defn handle [sock]
-  ;; TODO gracefully handle closed sockets
+(defn handle [bus sock]
+  ;; TODO gracefully handle closed sockets and unsubscribe from the bus
   (let [req (request/parse (receive sock))]
+    (prn req)
     (if (:err req)
       (write sock (str "ERR " (:err req)))
       (do
-        (case (:op req)
-          :pub (handle-pub sock)
-          :sub (handle-sub sock))
         (write sock "OK")
-        (recur sock)))))
+        (case (:op req)
+          :pub (handle-pub bus sock req)
+          :sub (handle-sub bus sock req))))
+    (recur bus sock)))
 
-;; Returns an atom, stop the server by setting it to false -- at which point we
-;; accept one more socket then exit.
-;; TODO close server without having to accept one more socket. Can we do this
-;; with async/chan
-(defn serve [port]
-  (let [running (atom true)]
-    (async/go
-      (with-open [server-sock (ServerSocket. port)]
-        (while @running
-          (let [sock (.accept server-sock)]
-            (async/go (handle sock))))))
-    running))
+;; Blocks forever
+(defn serve [bus port]
+  (with-open [server-sock (ServerSocket. port)]
+    (println (str "listening on :" port))
+    (while true
+      (let [sock (.accept server-sock)]
+        (async/thread (handle bus sock))))))

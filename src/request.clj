@@ -19,8 +19,8 @@
       {:op :sub
        :chan chan})))
 
-;; The caller should check the return value for an :err, I'm sure this isn't
-;; idiomatic but it'll do for now.
+;; The caller should check the returned map for an :err key, I'm sure this
+;; isn't idiomatic but it'll do for now.
 (defn parse [line]
   (let [[op rest] (split-first-word line)]
     (case op
