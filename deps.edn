@@ -12,7 +12,7 @@
 
   :lint/kondo
   {:extra-deps {clj-kondo/clj-kondo {:mvn/version "RELEASE"}}
-   :main-opts  ["-m" "clj-kondo.main" "--lint" "src"]}
+   :main-opts  ["-m" "clj-kondo.main" "--lint" "src" "test"]}
 
   :lint/idiom
   {:replace-deps {tvaughan/kibit-runner {:mvn/version "1.0.1"}}

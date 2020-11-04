@@ -1,8 +1,9 @@
 (ns server
   (:require
     [clojure.java.io :as io]
-    [clojure.core.async :as async :refer [<! >!]]
+    [clojure.core.async :as async :refer [<!]]
     [request]
+    [user]
     [bus])
   (:import [java.net ServerSocket]))
 
@@ -11,34 +12,36 @@
   (.flush writer))
 
 ;; TODO gracefully handle closed sockets and unsubscribe from the bus
-(defn read-loop [bus subscriber reader]
+(defn read-loop [bus user reader]
   (async/go-loop [] ; TODO should this be thread since we're doing blocking io?
-    (>! subscriber {:type :prompt})
+    (bus/post user {:type :prompt})
     (let [req (request/parse (.readLine reader))]
       (println "parsed request:" req)
       (case (:type req)
         :pub (do
-               (>! subscriber {:type :ok})
+               (bus/post user {:type :ok})
                (bus/pub bus (:chan req) (:msg req)))
         :sub (do
-               (>! subscriber {:type :ok})
-               (bus/sub bus (:chan req) subscriber))
+               (bus/post user {:type :ok})
+               (bus/sub bus (:chan req) user))
         :unsub (do
-                 (>! subscriber {:type :ok})
-                 (bus/unsub bus (:chan req) subscriber))
-        :err (>! subscriber {:type :err
+                 (bus/post user {:type :ok})
+                 (bus/unsub bus (:chan req) user))
+        :err (bus/post user {:type :err
                              :err (:err req)})))
     (recur)))
 
-;; Serialize writes through the subscriber channel
-(defn write-loop [subscriber writer]
+;; Serialize writes through the user channel
+(defn write-loop [user writer]
   (async/go-loop []
-    (let [m (<! subscriber)]
+    (let [m (<! (:inbox user))]
       (case (:type m)
-        :prompt (write writer "> ")
-        :ok (write writer "OK\n")
-        :msg (write writer (format "MSG %s %s\n" (:chan m) (:msg m)))
-        :err (write writer (format "ERR %s\n" (:err m)))))
+        ;; Note the carriage returns below to "move" the prompt when we get a
+        ;; new message.
+        :prompt (write writer "\r> ")
+        :ok (write writer "\rOK\n> ")
+        :msg (write writer (format "\rMSG %s %s\n> " (:chan m) (:msg m)))
+        :err (write writer (format "\rERR %s\n> " (:err m)))))
     (recur)))
 
 ;; Blocks forever
@@ -47,6 +50,6 @@
     (println (str "listening on :" port))
     (while true
       (let [sock (.accept server-sock)
-            subscriber (async/chan)]
-        (read-loop bus subscriber (io/reader sock))
-        (write-loop subscriber (io/writer sock))))))
+            user (user/user)]
+        (read-loop bus user (io/reader sock))
+        (write-loop user (io/writer sock))))))
