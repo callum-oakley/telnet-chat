@@ -20,6 +20,13 @@
     {:type type
      :chan chan}))
 
+(defn parse-nick [nick]
+  (if (str/includes? nick " ")
+    {:type :err
+     :err "nick contains spaces"}
+    {:type :nick
+     :nick nick}))
+
 ;; The caller should check the :type key of the returned map for errors. I'm
 ;; not sure this is is idiomatic but it'll do for now.
 (defn parse [line]
@@ -28,5 +35,6 @@
       "PUB" (parse-pub rest)
       "SUB" (parse-channel-op :sub rest)
       "UNSUB" (parse-channel-op :unsub rest)
+      "NICK" (parse-nick rest)
       {:type :err
        :err (str "unknown op: " op)})))

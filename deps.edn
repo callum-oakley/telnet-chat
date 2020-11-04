@@ -15,7 +15,7 @@
    :main-opts  ["-m" "clj-kondo.main" "--lint" "src" "test"]}
 
   :lint/idiom
-  {:replace-deps {tvaughan/kibit-runner {:mvn/version "1.0.1"}}
+  {:extra-deps {tvaughan/kibit-runner {:mvn/version "1.0.1"}}
    :main-opts    ["-m" "kibit-runner.cmdline"]}
 
   :repl
