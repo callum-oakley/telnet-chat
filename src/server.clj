@@ -4,7 +4,8 @@
     [clojure.core.async :as async :refer [<!]]
     [request]
     [user]
-    [bus])
+    [bus]
+    [foaf])
   (:import [java.net ServerSocket]))
 
 (defn write [writer s]
@@ -18,6 +19,7 @@
     :prompt (write writer "\r> ")
     :msg (write writer (format "\rMSG %s %s %s\n> "
                          (:chan m) (:from m) (:msg m)))
+    :raw (write writer (format "\r%s\n> " (:msg m)))
     :err (write writer (format "\rERR %s\n> " (:err m)))))
 
 (defn process-request [bus user req]
@@ -27,8 +29,8 @@
     :sub (bus/sub bus (:chan req) user)
     :unsub (bus/unsub bus (:chan req) user)
     :nick (user/identify user (:nick req))
-    :err (bus/post user {:type :err
-                         :err (:err req)})))
+    :foaf (bus/post user {:type :raw :msg (foaf/report @bus)})
+    :err (bus/post user {:type :err :err (:err req)})))
 
 (defn read-loop [bus user reader]
   (async/go-loop [] ; TODO should this be thread since we're doing blocking io?

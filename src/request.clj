@@ -36,5 +36,6 @@
       "SUB" (parse-channel-op :sub rest)
       "UNSUB" (parse-channel-op :unsub rest)
       "NICK" (parse-nick rest)
+      "FOAF" {:type :foaf}
       {:type :err
        :err (str "unknown op: " op)})))

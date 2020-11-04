@@ -11,7 +11,8 @@
     "PUB #foo hello world" {:type :pub :chan "#foo" :msg "hello world"}
     "SUB #foo"             {:type :sub :chan "#foo"}
     "UNSUB #foo"           {:type :unsub :chan "#foo"}
-    "NICK @alice"           {:type :nick :nick "@alice"}
+    "NICK @alice"          {:type :nick :nick "@alice"}
+    "FOAF"                 {:type :foaf}
     "PUB #foo"             {:type :err :err "empty message"}
     "SUB #foo bar"         {:type :err :err "channel contains spaces"}
     "UNSUB #foo bar"       {:type :err :err "channel contains spaces"}
