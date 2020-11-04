@@ -8,15 +8,17 @@
 
 (defn pub [bus chan msg]
   (doseq [subscriber (@bus chan)]
-    (async/put! subscriber msg)))
+    (async/put! subscriber {:type :msg
+                            :chan chan
+                            :msg msg})))
 
-(defn sub [bus chan]
-  (let [subscriber (async/chan)]
-    (dosync
-      (alter bus #(merge-with into % {chan #{subscriber}})))
-    subscriber))
+(defn sub [bus chan subscriber]
+  (dosync
+    (alter bus update chan #(into #{subscriber} %))))
 
-;;;; TODO support unsubscribe
+(defn unsub [bus chan subscriber]
+  (dosync
+    (alter bus update chan disj subscriber)))
 
-;;;; TODO core/async actually has a dedicated publish subscribe model which I
+;;;; TODO core.async actually has a dedicated publish subscribe model which I
 ;;;; should probably be using instead.

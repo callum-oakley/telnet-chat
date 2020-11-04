@@ -1,59 +1,52 @@
-;;;; Adapted from
-;;;; https://github.com/clojure-cookbook/clojure-cookbook/blob/master/05_network-io/5-10_tcp-server.asciidoc
-
 (ns server
   (:require
     [clojure.java.io :as io]
-    [clojure.core.async :as async]
+    [clojure.core.async :as async :refer [<! >!]]
     [request]
     [bus])
   (:import [java.net ServerSocket]))
 
-;;;; TODO handle non-text input
-;;;; io/reader and io/writer assume everything is text. This fits our toy
-;;;; protocol, but you probably get a pretty knarly error if you send non-text.
+(defn write [writer s]
+  (.write writer s)
+  (.flush writer))
 
-(defn receive
-  "Read a line of textual data from the given socket"
-  [socket]
-  (.readLine (io/reader socket)))
+;; TODO gracefully handle closed sockets and unsubscribe from the bus
+(defn read-loop [bus subscriber reader]
+  (async/go-loop [] ; TODO should this be thread since we're doing blocking io?
+    (>! subscriber {:type :prompt})
+    (let [req (request/parse (.readLine reader))]
+      (println "parsed request:" req)
+      (case (:type req)
+        :pub (do
+               (>! subscriber {:type :ok})
+               (bus/pub bus (:chan req) (:msg req)))
+        :sub (do
+               (>! subscriber {:type :ok})
+               (bus/sub bus (:chan req) subscriber))
+        :unsub (do
+                 (>! subscriber {:type :ok})
+                 (bus/unsub bus (:chan req) subscriber))
+        :err (>! subscriber {:type :err
+                             :err (:err req)})))
+    (recur)))
 
-(defn write
-  "Send the given line out over the given socket, appends a newline"
-  [socket line]
-  (let [writer (io/writer socket)]
-    (.write writer (str line \newline))
-    (.flush writer)))
-
-(defn handle-pub [bus sock {chan :chan msg :msg}]
-  (bus/pub bus chan msg))
-
-(defn handle-sub [bus sock {chan :chan}]
-  (async/go
-    (let [subscription (bus/sub bus chan)]
-      (while true
-        (->> subscription
-          async/<!
-          (str "MSG ")
-          (write sock))))))
-
-(defn handle [bus sock]
-  ;; TODO gracefully handle closed sockets and unsubscribe from the bus
-  (let [req (request/parse (receive sock))]
-    (prn req)
-    (if (:err req)
-      (write sock (str "ERR " (:err req)))
-      (do
-        (write sock "OK")
-        (case (:op req)
-          :pub (handle-pub bus sock req)
-          :sub (handle-sub bus sock req))))
-    (recur bus sock)))
+;; Serialize writes through the subscriber channel
+(defn write-loop [subscriber writer]
+  (async/go-loop []
+    (let [m (<! subscriber)]
+      (case (:type m)
+        :prompt (write writer "> ")
+        :ok (write writer "OK\n")
+        :msg (write writer (format "MSG %s %s\n" (:chan m) (:msg m)))
+        :err (write writer (format "ERR %s\n" (:err m)))))
+    (recur)))
 
 ;; Blocks forever
 (defn serve [bus port]
   (with-open [server-sock (ServerSocket. port)]
     (println (str "listening on :" port))
     (while true
-      (let [sock (.accept server-sock)]
-        (async/thread (handle bus sock))))))
+      (let [sock (.accept server-sock)
+            subscriber (async/chan)]
+        (read-loop bus subscriber (io/reader sock))
+        (write-loop subscriber (io/writer sock))))))
